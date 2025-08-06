@@ -1,11 +1,20 @@
 use super::tile_color::TileColor;
 use std::cmp::Ordering;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Tile {
     pub number: u8,
     pub color: TileColor,
+    pub is_wildcard: bool,
 }
+
+impl PartialEq for Tile {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number && self.color == other.color
+    }
+}
+
+impl Eq for Tile {}
 
 impl Ord for Tile {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -23,7 +32,11 @@ impl PartialOrd for Tile {
 }
 
 impl Tile {
-    pub(crate) fn new(number: u8, color: TileColor) -> Self {
-        Tile { number, color }
+    pub(crate) fn new(number: u8, color: TileColor, is_wildcard: bool) -> Self {
+        Tile {
+            number,
+            color,
+            is_wildcard,
+        }
     }
 }

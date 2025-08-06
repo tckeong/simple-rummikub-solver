@@ -3,9 +3,12 @@ pub(crate) mod tile;
 pub(crate) mod tile_color;
 pub(crate) mod tile_command;
 
+use std::collections::HashSet;
 use std::vec;
 
 use tile::Tile;
+
+use crate::game::tile_color::TileColor;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
@@ -19,6 +22,12 @@ pub struct GameOperation {
     pub command: Command,
     pub index: usize,
     pub tiles: Vec<Tile>,
+}
+
+#[derive(Debug)]
+enum TilesType {
+    PureColor,
+    MixedColor,
 }
 
 impl GameOperation {
@@ -63,17 +72,27 @@ impl Game {
             _ => {
                 self.board[operation.index].extend(operation.tiles);
                 self.board[operation.index].sort_unstable();
-                self.check_and_split(operation.index);
+
+                if operation.index != 0 {
+                    let tiles = self.board[operation.index].clone();
+                    let tiles = self.wildcard_to_tiles(tiles);
+
+                    self.board[operation.index] = tiles[0].clone();
+
+                    if tiles.len() > 1 {
+                        self.board.push(tiles[1].clone());
+                    }
+                }
             }
         }
     }
 
-    fn check_and_split(&mut self, index: usize) {
-        let tiles = &self.board[index];
+    fn check_and_split(&mut self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+        let tiles = tiles;
         let n = tiles.len();
 
         if n < 6 {
-            return;
+            return vec![tiles];
         }
 
         let mut last_repeat = 0;
@@ -97,13 +116,204 @@ impl Game {
             }
         }
 
-        if !split_tiles2.is_empty() {
-            self.board[index] = split_tiles1;
-            self.board.push(split_tiles2);
-        }
+        vec![split_tiles1, split_tiles2]
     }
 
     pub fn reset(&mut self) {
         self.board = vec![vec![]];
+    }
+
+    fn wildcard_count(&self, tiles: &Vec<Tile>) -> i32 {
+        let mut count = 0;
+
+        for tile in tiles {
+            if tile.is_wildcard {
+                count += 1;
+            }
+        }
+
+        count
+    }
+
+    fn wildcard_to_tiles(&mut self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+        let wildcard_count = self.wildcard_count(&tiles);
+
+        if wildcard_count == 0 {
+            return vec![tiles];
+        }
+
+        let tiles = tiles
+            .clone()
+            .into_iter()
+            .filter(|tile| !tile.is_wildcard)
+            .collect::<Vec<_>>();
+        let tiles_type = self.get_tiles_type(&tiles);
+
+        match tiles_type {
+            TilesType::PureColor => {
+                let color = tiles[0].color;
+
+                let low = tiles.iter().min_by_key(|tile| tile.number).unwrap().number;
+                let high = tiles.iter().max_by_key(|tile| tile.number).unwrap().number;
+
+                let low = 1.max(low - 1);
+                let high = 13.min(high + 1);
+
+                let mut tiles_set = Vec::new();
+
+                // max 2 wildcards
+                if wildcard_count == 1 {
+                    for num in low..=high {
+                        let mut tiles = tiles.clone();
+                        let tile = Tile::new(num, color, true);
+                        tiles.push(tile);
+                        tiles.sort_unstable();
+
+                        tiles_set = self.check_and_split(tiles);
+
+                        if self.is_valid_pure_color_tiles(&tiles_set) {
+                            break;
+                        }
+                    }
+                } else if wildcard_count == 2 {
+                    for num1 in low..=high {
+                        for num2 in (low - 1)..=(high + 1) {
+                            let mut tiles = tiles.clone();
+                            let tile1 = Tile::new(num1, color, true);
+                            let tile2 = Tile::new(num2, color, true);
+                            tiles.push(tile1);
+                            tiles.push(tile2);
+                            tiles.sort_unstable();
+
+                            tiles_set = self.check_and_split(tiles);
+
+                            if self.is_valid_pure_color_tiles(&tiles_set) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                tiles_set
+            }
+
+            TilesType::MixedColor => {
+                let number = tiles[0].number;
+
+                let mut tiles_set = Vec::new();
+
+                // max 2 wildcards
+                if wildcard_count == 1 {
+                    for color in TileColor::iter() {
+                        let mut tiles = tiles.clone();
+                        let tile = Tile::new(number, color, true);
+                        tiles.push(tile);
+                        tiles.sort_unstable();
+
+                        tiles_set = self.check_and_split(tiles);
+
+                        if self.is_valid_mixed_color_tiles(&tiles_set) {
+                            break;
+                        }
+                    }
+                } else if wildcard_count == 2 {
+                    for color1 in TileColor::iter() {
+                        for color2 in TileColor::iter() {
+                            let mut tiles = tiles.clone();
+
+                            let tile1 = Tile::new(number, color1, true);
+                            let tile2 = Tile::new(number, color2, true);
+                            tiles.push(tile1);
+                            tiles.push(tile2);
+                            tiles.sort_unstable();
+
+                            tiles_set = self.check_and_split(tiles);
+
+                            if self.is_valid_mixed_color_tiles(&tiles_set) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                tiles_set
+            }
+        }
+    }
+
+    fn get_tiles_type(&self, tiles: &Vec<Tile>) -> TilesType {
+        let mut colors = HashSet::new();
+
+        for tile in tiles {
+            if tile.is_wildcard {
+                continue;
+            }
+
+            colors.insert(tile.color);
+        }
+
+        if colors.len() == 1 {
+            TilesType::PureColor
+        } else {
+            TilesType::MixedColor
+        }
+    }
+
+    fn is_valid_pure_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
+        let mut is_valid = true;
+
+        for tiles in tiles_set {
+            let mut value = tiles.iter().min_by_key(|tile| tile.number).unwrap().number;
+
+            if tiles.len() < 3 {
+                is_valid = false;
+                break;
+            }
+
+            for tile in tiles {
+                if tile.number == value {
+                    value += 1;
+                } else if tile.number == value - 1 {
+                    continue;
+                } else {
+                    is_valid = false;
+                    break;
+                }
+            }
+        }
+
+        is_valid
+    }
+
+    fn is_valid_mixed_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
+        let mut is_valid = true;
+
+        for tiles in tiles_set {
+            let mut colors = HashSet::new();
+
+            for tile in tiles {
+                colors.insert(tile.color);
+            }
+
+            if colors.len() < 3 {
+                is_valid = false;
+                break;
+            }
+        }
+
+        is_valid
+    }
+}
+
+mod tests {
+    #[allow(unused_imports)]
+    use super::*;
+
+    #[test]
+    fn test1() {
+        let tile1 = Tile::new(1, TileColor::Red, true);
+        let tile2 = Tile::new(1, TileColor::Red, false);
+
+        assert!(tile1 == tile2);
     }
 }

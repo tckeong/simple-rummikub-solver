@@ -2,12 +2,12 @@ use crossterm::style::Color;
 use std::cmp::Ordering;
 
 // h, b, o, r
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TileColor {
-    Blue,
-    Red,
-    Orange,
     Black,
+    Blue,
+    Orange,
+    Red,
 }
 
 impl PartialOrd for TileColor {
@@ -53,5 +53,15 @@ impl TileColor {
             TileColor::Orange => 2,
             TileColor::Red => 3,
         }
+    }
+
+    pub fn iter() -> impl Iterator<Item = TileColor> {
+        [
+            TileColor::Black,
+            TileColor::Blue,
+            TileColor::Orange,
+            TileColor::Red,
+        ]
+        .into_iter()
     }
 }

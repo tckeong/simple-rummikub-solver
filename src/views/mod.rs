@@ -457,7 +457,12 @@ impl TUI {
 
     fn draw_tile(self: &mut Self, tile: Tile, x_pos: u16) -> ioResult<()> {
         self.execute(SetForegroundColor(tile.color.as_color()))?;
-        self.draw_box(6, 2, x_pos, false, &tile.number.to_string())?;
+        let text = if tile.is_wildcard {
+            format!("w {}", tile.number)
+        } else {
+            format!("{}", tile.number)
+        };
+        self.draw_box(6, 2, x_pos, false, text.as_str())?;
         self.execute(ResetColor)?;
 
         Ok(())

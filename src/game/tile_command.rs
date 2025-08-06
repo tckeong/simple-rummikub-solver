@@ -54,10 +54,15 @@ impl<'a> TileCommand {
 
             let test_args = test_args
                 .iter()
-                .filter(|s| s.parse::<u32>().is_ok())
+                .filter(|s| s == &&"w" || s.parse::<u8>().is_ok())
                 .filter(|s| {
-                    let d = s.parse::<u32>().unwrap_or(14);
-                    d >= 1 && d <= 13
+                    let d = if s == &&"w" {
+                        251
+                    } else {
+                        s.parse::<u8>().unwrap_or(0)
+                    };
+
+                    d == 251 || (d >= 1 && d <= 13)
                 })
                 .collect::<Vec<&String>>();
 
@@ -72,7 +77,7 @@ impl<'a> TileCommand {
 
             let test_args = test_args
                 .iter()
-                .filter(|s| s == &&"r" || s == &&"b" || s == &&"h" || s == &&"o")
+                .filter(|s| s == &&"w" || s == &&"r" || s == &&"b" || s == &&"h" || s == &&"o")
                 .collect::<Vec<&String>>();
 
             if test_args.len() == n {
@@ -111,12 +116,19 @@ impl ToTiles for TileCommand {
 
                 for arg in args {
                     let num = arg.parse::<u8>().unwrap_or_else(|_| {
-                        panic!("Invalid number in args: {}", arg);
+                        (arg == "w").then_some(251).unwrap_or_else(|| {
+                            panic!("Invalid number in args: {}", arg);
+                        })
                     });
 
-                    tiles.push(Tile::new(num, color));
+                    let is_wildcard = arg == "w";
+                    let num = is_wildcard.then_some(251).unwrap_or(num);
+                    let color = is_wildcard.then_some(TileColor::Red).unwrap_or(color);
+
+                    tiles.push(Tile::new(num, color, is_wildcard));
                 }
             }
+
             c if c.chars().all(|ch| ch.is_ascii_digit()) => {
                 let num = c.parse::<u8>().unwrap_or_else(|_| {
                     panic!("Invalid digit in tail: {}", c);
@@ -128,10 +140,15 @@ impl ToTiles for TileCommand {
                         "b" => TileColor::Blue,
                         "h" => TileColor::Black,
                         "o" => TileColor::Orange,
+                        "w" => TileColor::Red,
                         _ => panic!("Invalid color in args: {}", arg),
                     };
 
-                    tiles.push(Tile::new(num, color));
+                    let is_wildcard = arg == "w";
+                    let num = is_wildcard.then_some(251).unwrap_or(num);
+                    let color = is_wildcard.then_some(TileColor::Red).unwrap_or(color);
+
+                    tiles.push(Tile::new(num, color, is_wildcard));
                 }
             }
             _ => {}

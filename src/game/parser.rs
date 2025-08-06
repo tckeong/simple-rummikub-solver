@@ -33,7 +33,7 @@ impl Parser {
         )
         .unwrap();
 
-        let init_pattern = Regex::new(r"(?P<color>[broh])\((?P<number>\d+)\)").unwrap();
+        let init_pattern = Regex::new(r"(?P<color>[broh])\((?P<number>\d+|[w])\)").unwrap();
 
         Parser {
             pattern,
@@ -182,6 +182,8 @@ pub fn command_capture_to_tile_command(
 
 #[cfg(test)]
 mod tests {
+    use crate::game::ToTiles;
+
     use super::*;
 
     #[test]
@@ -219,6 +221,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_4() {
+        let p = Parser::new();
+        let cmd = p.parse("a1(11,12,w)b").expect("should parse");
+
+        assert_eq!(cmd.idx, Some("1"));
+        assert_eq!(cmd.cmd, Some("a"));
+        assert_eq!(cmd.args, Some("11,12,w"));
+        assert_eq!(cmd.tail, Some("b"));
+    }
+
+    #[test]
+    fn test_parse_5() {
+        let p = Parser::new();
+        let cmd = p.parse("a1(r,b,w)10").expect("should parse");
+
+        assert_eq!(cmd.idx, Some("1"));
+        assert_eq!(cmd.cmd, Some("a"));
+        assert_eq!(cmd.args, Some("r,b,w"));
+        assert_eq!(cmd.tail, Some("10"));
+
+        println!("{:?}", cmd.as_tile_command());
+
+        println!("{:?}", cmd.as_tile_command().unwrap().to_tiles());
+    }
+
+    #[test]
     fn test_parse_draw() {
         let p = Parser::new();
         let cmd = p.parse("d(10)r").expect("should parse");
@@ -229,7 +257,9 @@ mod tests {
         let tile_command = cmd
             .as_tile_command()
             .expect("should convert to TileCommand");
+
         println!("{:?}", cmd.as_tile_command());
+
         assert!(tile_command.cmd == Command::Draw);
         assert!(tile_command.idx == 0);
         assert!(tile_command.args == vec!["10".to_string()]);
@@ -274,5 +304,25 @@ mod tests {
             .map(|cmd| cmd.as_tile_command())
             .collect::<Vec<_>>();
         println!("{:?}", commands);
+    }
+
+    #[test]
+    fn test_parse_init2() {
+        let p = Parser::new();
+        let input = "r(1)b(2)h(3)o(w)";
+        let commands_init = p.parse_init(input).expect("should parse init commands");
+        let commands = commands_init
+            .iter()
+            .map(|cmd| cmd.as_tile_command())
+            .collect::<Vec<_>>();
+
+        println!("{:?}", commands);
+
+        let tiles = commands
+            .into_iter()
+            .map(|cmd| cmd.unwrap().to_tiles())
+            .collect::<Vec<_>>();
+
+        println!("{:?}", tiles);
     }
 }
