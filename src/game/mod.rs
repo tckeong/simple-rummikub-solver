@@ -166,7 +166,7 @@ impl Game {
         let wildcard_count = self.wildcard_count(&tiles);
 
         if wildcard_count == 0 {
-            return vec![tiles];
+            return self.check_and_split(tiles);
         }
 
         let tiles = tiles
@@ -384,5 +384,50 @@ mod tests {
                 Tile::new(3, TileColor::Red, false),
             ]
         );
+    }
+
+    #[test]
+    fn test3() {
+        let mut game = Game::new();
+        game.operate(GameOperation::new(
+            Command::Add,
+            0,
+            vec![Tile::new(10, TileColor::Red, false)],
+            None,
+        ));
+
+        let tiles1 = vec![
+            Tile::new(10, TileColor::Black, false),
+            Tile::new(11, TileColor::Black, false),
+            Tile::new(12, TileColor::Black, false),
+        ];
+
+        let tiles2 = vec![
+            Tile::new(9, TileColor::Black, false),
+            Tile::new(251, TileColor::Red, true),
+            Tile::new(13, TileColor::Black, false),
+        ];
+
+        let tiles3 = vec![
+            Tile::new(1, TileColor::Red, false),
+            Tile::new(1, TileColor::Blue, false),
+        ];
+
+        let replace_tiles = vec![Tile::new(11, TileColor::Black, false)];
+
+        game.operate(GameOperation::new(Command::Put, usize::MAX, tiles1, None));
+
+        game.operate(GameOperation::new(Command::Add, 1, tiles2, None));
+
+        game.operate(GameOperation::new(
+            Command::Replace,
+            2,
+            tiles3,
+            Some(replace_tiles),
+        ));
+
+        let board = game.get_board();
+
+        println!("{:?}", board);
     }
 }

@@ -7,7 +7,7 @@ pub(crate) struct Parser {
     init_pattern: Regex,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct CommandCapture<'a> {
     pub cmd: Option<&'a str>,
     pub idx: Option<&'a str>,
@@ -103,7 +103,9 @@ impl CommandCapture<'_> {
 
                 Ok(idx)
             }
+
             None if cmd == Command::Draw => Ok(0),
+
             _ => Ok(usize::MAX),
         }?;
 
@@ -132,10 +134,10 @@ impl CommandCapture<'_> {
         Ok(TileCommand {
             cmd,
             idx,
-            replace_args,
-            replace_tail,
             args,
             tail,
+            replace_args,
+            replace_tail,
         })
     }
 }
@@ -272,11 +274,11 @@ mod tests {
     #[test]
     fn test_parse_6() {
         let p = Parser::new();
-        let cmd = p.parse("r1(1)h(r,o)2").expect("should parse");
+        let cmd = p.parse("r2(11)h(r,o)2").expect("should parse");
 
-        assert_eq!(cmd.idx, Some("1"));
+        assert_eq!(cmd.idx, Some("2"));
         assert_eq!(cmd.cmd, Some("r"));
-        assert_eq!(cmd.replace_args, Some("1"));
+        assert_eq!(cmd.replace_args, Some("11"));
         assert_eq!(cmd.replace_tail, Some("h"));
         assert_eq!(cmd.args, Some("r,o"));
         assert_eq!(cmd.tail, Some("2"));

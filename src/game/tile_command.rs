@@ -33,12 +33,30 @@ pub(crate) struct TileCommand {
     pub cmd: Command,
     pub idx: usize,
     pub args: Vec<String>,
+    pub tail: String,
     pub replace_args: Option<Vec<String>>,
     pub replace_tail: Option<String>,
-    pub tail: String,
 }
 
-impl<'a> TileCommand {
+impl TileCommand {
+    pub fn new(
+        cmd: Command,
+        idx: usize,
+        args: Vec<String>,
+        tail: String,
+        replace_args: Option<Vec<String>>,
+        replace_tail: Option<String>,
+    ) -> Self {
+        TileCommand {
+            cmd,
+            idx,
+            args,
+            tail,
+            replace_args,
+            replace_tail,
+        }
+    }
+
     pub fn validate(&self, game: &Game) -> Result<Self, TileCommandError> {
         let idx = match self.cmd {
             Command::Add | Command::Replace => game
@@ -73,23 +91,23 @@ impl<'a> TileCommand {
                 self.validate_colors(replace_args)
             }?;
 
-            Ok(TileCommand {
-                cmd: self.cmd.clone(),
-                idx,
-                replace_args: Some(replace_args),
-                replace_tail: Some(replace_tail),
-                args,
-                tail: self.tail.clone(),
-            })
+            Ok(TileCommand::new(
+                self.cmd.clone(),
+                self.idx,
+                self.args.clone(),
+                self.tail.clone(),
+                Some(replace_args),
+                Some(replace_tail),
+            ))
         } else {
-            Ok(TileCommand {
-                cmd: self.cmd.clone(),
+            Ok(TileCommand::new(
+                self.cmd.clone(),
                 idx,
-                replace_args: self.replace_args.clone(),
-                replace_tail: self.replace_tail.clone(),
                 args,
-                tail: self.tail.clone(),
-            })
+                self.tail.clone(),
+                None,
+                None,
+            ))
         }
     }
 
@@ -112,7 +130,7 @@ impl<'a> TileCommand {
             .collect::<Vec<&String>>();
 
         (test_args.len() == n)
-            .then_some(self.args.clone())
+            .then_some(args.clone())
             .ok_or(TileCommandError::InvalidArgs)
     }
 
@@ -126,7 +144,7 @@ impl<'a> TileCommand {
             .collect::<Vec<&String>>();
 
         (test_args.len() == n)
-            .then_some(self.args.clone())
+            .then_some(args.clone())
             .ok_or(TileCommandError::InvalidArgs)
     }
 }
