@@ -11,6 +11,8 @@ pub(crate) struct Parser {
 pub(crate) struct CommandCapture<'a> {
     pub cmd: Option<&'a str>,
     pub idx: Option<&'a str>,
+    pub replace_args: Option<&'a str>,
+    pub replace_tail: Option<&'a str>,
     pub args: Option<&'a str>,
     pub tail: Option<&'a str>,
 }
@@ -19,17 +21,19 @@ impl Parser {
     pub fn new() -> Self {
         let pattern = Regex::new(
             r"(?x)^
-        (?P<cmd>[adp])          
-        (?P<idx>\d+|d)?     
-        \(?                     
-        (?P<args>[^)]*)         
-        \)?                     
-        (?P<tail>               
-            [broh]              
-            |                   
-            \d+               
-        )
-    $",
+                (?P<cmd>[adpr])          
+                (?P<idx>\d+|d)?           
+                (?:                      
+                    \(
+                        (?P<replace_args>[^)]*)
+                    \)
+                    (?P<replace_tail>[broh]|\d+)
+                )?                       
+                \(
+                    (?P<args>[^)]*)
+                \)
+                (?P<tail>[broh]|\d+)
+            $",
         )
         .unwrap();
 
@@ -48,6 +52,8 @@ impl Parser {
         Some(CommandCapture {
             cmd: captures.name("cmd").map(|m| m.as_str()),
             idx: captures.name("idx").map(|m| m.as_str()),
+            replace_args: captures.name("replace_args").map(|m| m.as_str()),
+            replace_tail: captures.name("replace_tail").map(|m| m.as_str()),
             args: captures.name("args").map(|m| m.as_str()),
             tail: captures.name("tail").map(|m| m.as_str()),
         })
@@ -64,6 +70,8 @@ impl Parser {
             commands.push(CommandCapture {
                 cmd: Some("a"),
                 idx: Some("0"),
+                replace_args: None,
+                replace_tail: None,
                 args: Some(number),
                 tail: Some(color),
             });
@@ -83,6 +91,7 @@ impl CommandCapture<'_> {
             Some("a") => Ok(Command::Add),
             Some("p") => Ok(Command::Put),
             Some("d") => Ok(Command::Draw),
+            Some("r") => Ok(Command::Replace),
             _ => Err(TileCommandError::InvalidCommand),
         }?;
 
@@ -98,6 +107,18 @@ impl CommandCapture<'_> {
             _ => Ok(usize::MAX),
         }?;
 
+        let replace_args = self
+            .replace_args
+            .map(|args| args.to_string().split(',').map(|s| s.to_string()).collect());
+
+        let replace_tail = self.replace_tail.map(|tail| tail.to_string());
+
+        if cmd == Command::Replace && (replace_args.is_none() || replace_tail.is_none()) {
+            return Err(TileCommandError::Other(String::from(
+                "Invalid replace command format!",
+            )));
+        }
+
         let args = self
             .args
             .map(|args| args.to_string().split(',').map(|s| s.to_string()).collect())
@@ -111,6 +132,8 @@ impl CommandCapture<'_> {
         Ok(TileCommand {
             cmd,
             idx,
+            replace_args,
+            replace_tail,
             args,
             tail,
         })
@@ -247,9 +270,30 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_6() {
+        let p = Parser::new();
+        let cmd = p.parse("r1(1)h(r,o)2").expect("should parse");
+
+        assert_eq!(cmd.idx, Some("1"));
+        assert_eq!(cmd.cmd, Some("r"));
+        assert_eq!(cmd.replace_args, Some("1"));
+        assert_eq!(cmd.replace_tail, Some("h"));
+        assert_eq!(cmd.args, Some("r,o"));
+        assert_eq!(cmd.tail, Some("2"));
+
+        println!("{:?}", cmd.as_tile_command());
+
+        println!("{:?}", cmd.as_tile_command().unwrap().to_tiles());
+    }
+
+    #[test]
     fn test_parse_draw() {
         let p = Parser::new();
-        let cmd = p.parse("d(10)r").expect("should parse");
+        let cmd = p.parse("d(10)r");
+
+        println!("{:?}", cmd);
+        let cmd = cmd.expect("should parse");
+
         assert_eq!(cmd.cmd, Some("d"));
         assert_eq!(cmd.args, Some("10"));
         assert_eq!(cmd.tail, Some("r"));

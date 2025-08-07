@@ -15,12 +15,14 @@ pub enum Command {
     Add,
     Put,
     Draw,
+    Replace,
 }
 
 #[derive(Debug)]
 pub struct GameOperation {
     pub command: Command,
     pub index: usize,
+    pub replace_tiles: Option<Vec<Tile>>,
     pub tiles: Vec<Tile>,
 }
 
@@ -31,10 +33,16 @@ enum TilesType {
 }
 
 impl GameOperation {
-    pub fn new(command: Command, index: usize, tiles: Vec<Tile>) -> Self {
+    pub fn new(
+        command: Command,
+        index: usize,
+        tiles: Vec<Tile>,
+        replace_tiles: Option<Vec<Tile>>,
+    ) -> Self {
         GameOperation {
             command,
             index,
+            replace_tiles,
             tiles,
         }
     }
@@ -69,6 +77,25 @@ impl Game {
                 operation.tiles.sort_unstable();
                 self.board.push(operation.tiles);
             }
+
+            Command::Replace => {
+                let wildcard_count = self.wildcard_count(&self.board[operation.index]);
+                let replace_tiles = operation.replace_tiles.unwrap();
+
+                if wildcard_count != replace_tiles.len() {
+                    return;
+                }
+
+                let tiles_to_replace = self.board[operation.index].clone();
+                self.board[operation.index] =
+                    self.replace_wildcards(tiles_to_replace, replace_tiles);
+                let mut tiles = operation.tiles;
+                tiles.push(Tile::new(251, TileColor::Red, true));
+
+                let tiles = self.wildcard_to_tiles(tiles);
+                self.board.extend(tiles);
+            }
+
             _ => {
                 self.board[operation.index].extend(operation.tiles);
                 self.board[operation.index].sort_unstable();
@@ -123,7 +150,7 @@ impl Game {
         self.board = vec![vec![]];
     }
 
-    fn wildcard_count(&self, tiles: &Vec<Tile>) -> i32 {
+    fn wildcard_count(&self, tiles: &Vec<Tile>) -> usize {
         let mut count = 0;
 
         for tile in tiles {
@@ -241,6 +268,24 @@ impl Game {
         }
     }
 
+    fn replace_wildcards(&self, tiles: Vec<Tile>, replace_tiles: Vec<Tile>) -> Vec<Tile> {
+        let mut tiles = tiles;
+
+        for replace_tile in replace_tiles {
+            for i in 0..tiles.len() {
+                let tile = &mut tiles[i];
+
+                if tile.is_wildcard {
+                    tile.is_wildcard = false;
+                    tile.number = replace_tile.number;
+                    tile.color = replace_tile.color;
+                }
+            }
+        }
+
+        tiles
+    }
+
     fn get_tiles_type(&self, tiles: &Vec<Tile>) -> TilesType {
         let mut colors = HashSet::new();
 
@@ -315,5 +360,29 @@ mod tests {
         let tile2 = Tile::new(1, TileColor::Red, false);
 
         assert!(tile1 == tile2);
+    }
+
+    #[test]
+    fn test2() {
+        let game = Game::new();
+        let tiles1 = vec![
+            Tile::new(1, TileColor::Red, false),
+            Tile::new(2, TileColor::Red, true),
+            Tile::new(3, TileColor::Red, false),
+        ];
+        let tiles2 = vec![Tile::new(2, TileColor::Red, false)];
+
+        let tiles = game.replace_wildcards(tiles1, tiles2);
+
+        println!("{:?}", tiles);
+
+        assert_eq!(
+            tiles,
+            vec![
+                Tile::new(1, TileColor::Red, false),
+                Tile::new(2, TileColor::Red, false),
+                Tile::new(3, TileColor::Red, false),
+            ]
+        );
     }
 }
