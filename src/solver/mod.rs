@@ -1,6 +1,6 @@
 use crate::game::{tile::Tile, Game, TilesType};
 
-struct Solver {
+pub struct Solver {
     game: Game,
 }
 
@@ -9,7 +9,7 @@ impl Solver {
         Solver { game }
     }
 
-    pub fn solve(&self) -> bool {
+    pub fn solve(&self) -> Option<Vec<Vec<Tile>>> {
         let board = self.game.get_board();
 
         let user_tiles = board[0].clone();
@@ -37,11 +37,11 @@ impl Solver {
                     board.push(tiles_set[1].clone());
                 }
             } else {
-                return false;
+                return None;
             }
         }
 
-        true
+        Some(board)
     }
 
     fn pick_available(&self, user_tiles: &Vec<Tile>) -> (Vec<Vec<Tile>>, Vec<Tile>) {
@@ -204,7 +204,7 @@ mod tests {
         ));
 
         let solver = Solver::new(game);
-        assert_eq!(solver.solve(), false);
+        assert!(solver.solve().is_none());
     }
 
     #[test]
@@ -229,6 +229,6 @@ mod tests {
         ));
 
         let solver = Solver::new(game);
-        assert!(solver.solve());
+        assert!(solver.solve().is_some());
     }
 }

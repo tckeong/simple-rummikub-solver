@@ -11,6 +11,7 @@ use crate::game::{
     tile::Tile,
     Game, ToTiles,
 };
+use crate::solver::Solver;
 use std::io::{stdout, Result as ioResult, Stdout, Write};
 
 pub struct TUI {
@@ -28,6 +29,7 @@ enum Page {
     GameRulePage,
     GameInitPage,
     GamePage,
+    SolverPage,
     InvalidCommandPage { error_message: String },
 }
 
@@ -198,25 +200,54 @@ impl TUI {
 
                         KeyCode::Enter => {
                             let command = self.buffer.trim();
-                            let command = Parser::new().parse(command);
 
-                            if let Some(cmd) = command {
-                                let tile_command = command_capture_to_tile_command(cmd, &self.game);
-
-                                match tile_command {
-                                    Ok(tile_command) => {
-                                        let game_operation = tile_command.to_tiles();
-                                        self.game.operate(game_operation);
-                                    }
-                                    Err(e) => {
-                                        self.display_error(&e.to_string());
-                                    }
-                                }
+                            if command == "solve" {
+                                self.page = Page::SolverPage;
                             } else {
-                                self.display_error("Invalid command format!");
+                                let command = Parser::new().parse(command);
+
+                                if let Some(cmd) = command {
+                                    let tile_command =
+                                        command_capture_to_tile_command(cmd, &self.game);
+
+                                    match tile_command {
+                                        Ok(tile_command) => {
+                                            let game_operation = tile_command.to_tiles();
+                                            self.game.operate(game_operation);
+                                        }
+                                        Err(e) => {
+                                            self.display_error(&e.to_string());
+                                        }
+                                    }
+                                } else {
+                                    self.display_error("Invalid command format!");
+                                }
                             }
 
                             self.buffer.clear();
+                        }
+                        _ => {}
+                    }
+                };
+
+                Ok(should_exit)
+            }
+
+            Page::SolverPage => {
+                self.render_solver_page()?;
+
+                self.flush()?;
+
+                let mut should_exit = false;
+
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Char('q') => should_exit = true,
+                        KeyCode::Char('m') => {
+                            self.page = Page::MainPage;
+                        }
+                        KeyCode::Char('c') => {
+                            self.page = Page::GamePage;
                         }
                         _ => {}
                     }
@@ -343,7 +374,7 @@ impl TUI {
         self.print_and_move("Initital Tile Set: ", 1)?;
 
         for (j, tile) in board[0].iter().enumerate() {
-            self.draw_tile(tile.clone(), 2 + (j * 6) as u16)?;
+            self.draw_tile(tile.clone(), 2 + (j * 8) as u16)?;
         }
 
         self.y_pos += 4;
@@ -360,7 +391,7 @@ impl TUI {
             print!("Index {}: ", i);
             self.execute_move(0, 0)?;
             for (j, tile) in row.iter().enumerate() {
-                self.draw_tile(tile.clone(), 11 + (j * 6) as u16)?;
+                self.draw_tile(tile.clone(), 11 + (j * 8) as u16)?;
             }
 
             self.y_pos += 3;
@@ -371,6 +402,37 @@ impl TUI {
         self.execute_move(0, 0)?;
         self.print_and_move(format!("Your current command: {}", self.buffer).as_str(), 0)?;
         self.execute_move(22 + self.buffer.len() as u16, 0)?;
+
+        Ok(())
+    }
+
+    fn render_solver_page(&mut self) -> ioResult<()> {
+        let game = self.game.clone();
+        let solver = Solver::new(game);
+        let result = solver.solve();
+
+        if let Some(board) = result {
+            self.print_and_move("Game Solved!", 1)?;
+            self.print_and_move("Press 'c' to continue...", 2)?;
+
+            self.print_and_move("The solution board: ", 2)?;
+
+            for (i, row) in board.iter().enumerate() {
+                self.execute(cursor::MoveTo(0, self.y_pos + 1))?;
+                print!("Index {}: ", i);
+                self.execute_move(0, 0)?;
+                for (j, tile) in row.iter().enumerate() {
+                    self.draw_tile(tile.clone(), 11 + (j * 8) as u16)?;
+                }
+
+                self.y_pos += 3;
+            }
+        } else {
+            self.print_and_move("Game Not Solved!", 1)?;
+            self.print_and_move("Press 'c' to continue...", 2)?;
+        }
+
+        self.execute_move(0, 0)?;
 
         Ok(())
     }
@@ -462,7 +524,7 @@ impl TUI {
         } else {
             format!("{}", tile.number)
         };
-        self.draw_box(6, 2, x_pos, false, text.as_str())?;
+        self.draw_box(8, 2, x_pos, false, text.as_str())?;
         self.execute(ResetColor)?;
 
         Ok(())

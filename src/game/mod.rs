@@ -52,7 +52,7 @@ pub trait ToTiles {
     fn to_tiles(&self) -> GameOperation;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Game {
     pub board: Vec<Vec<Tile>>,
 }

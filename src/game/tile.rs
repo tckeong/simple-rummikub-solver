@@ -1,7 +1,7 @@
 use super::tile_color::TileColor;
 use std::cmp::Ordering;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Tile {
     pub number: u8,
     pub color: TileColor,
@@ -30,6 +30,8 @@ impl PartialOrd for Tile {
         Some(self.cmp(other))
     }
 }
+
+pub type Tiles = Vec<Tile>;
 
 impl Tile {
     pub(crate) fn new(number: u8, color: TileColor, is_wildcard: bool) -> Self {
