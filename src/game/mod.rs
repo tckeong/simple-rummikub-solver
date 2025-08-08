@@ -120,7 +120,7 @@ impl Game {
         }
     }
 
-    fn check_and_split(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    pub fn check_and_split(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
 
         if n < 6 {
@@ -130,12 +130,12 @@ impl Game {
         let tiles_type = Self::get_tiles_type(&tiles);
 
         match tiles_type {
-            TilesType::PureColor => self.split_pure_color_tiles(tiles),
-            TilesType::MixedColor => self.split_mixed_colors_tiles(tiles),
+            TilesType::PureColor => Self::split_pure_color_tiles(tiles),
+            TilesType::MixedColor => Self::split_mixed_colors_tiles(tiles),
         }
     }
 
-    fn split_pure_color_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    fn split_pure_color_tiles(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
         let mut last_repeat = 0;
 
@@ -161,7 +161,7 @@ impl Game {
         vec![split_tiles1, split_tiles2]
     }
 
-    fn split_mixed_colors_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    fn split_mixed_colors_tiles(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
         let mut colors_map = HashMap::new();
         let mut numbers_map = HashMap::new();
@@ -245,7 +245,7 @@ impl Game {
         let wildcard_count = Self::wildcard_count(&tiles);
 
         if wildcard_count == 0 {
-            return self.check_and_split(tiles);
+            return Self::check_and_split(tiles);
         }
 
         let tiles = tiles
@@ -275,9 +275,9 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = self.check_and_split(tiles);
+                        tiles_set = Self::check_and_split(tiles);
 
-                        if self.is_valid_pure_color_tiles(&tiles_set) {
+                        if Self::is_valid_pure_color_tiles(&tiles_set) {
                             break;
                         }
                     }
@@ -291,9 +291,9 @@ impl Game {
                             tiles.push(tile2);
                             tiles.sort_unstable();
 
-                            tiles_set = self.check_and_split(tiles);
+                            tiles_set = Self::check_and_split(tiles);
 
-                            if self.is_valid_pure_color_tiles(&tiles_set) {
+                            if Self::is_valid_pure_color_tiles(&tiles_set) {
                                 break;
                             }
                         }
@@ -316,9 +316,9 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = self.check_and_split(tiles);
+                        tiles_set = Self::check_and_split(tiles);
 
-                        if self.is_valid_mixed_color_tiles(&tiles_set) {
+                        if Self::is_valid_mixed_color_tiles(&tiles_set) {
                             break;
                         }
                     }
@@ -333,9 +333,9 @@ impl Game {
                             tiles.push(tile2);
                             tiles.sort_unstable();
 
-                            tiles_set = self.check_and_split(tiles);
+                            tiles_set = Self::check_and_split(tiles);
 
-                            if self.is_valid_mixed_color_tiles(&tiles_set) {
+                            if Self::is_valid_mixed_color_tiles(&tiles_set) {
                                 break;
                             }
                         }
@@ -405,7 +405,7 @@ impl Game {
         (start, end)
     }
 
-    fn is_valid_pure_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
+    pub fn is_valid_pure_color_tiles(tiles_set: &Vec<Vec<Tile>>) -> bool {
         let mut is_valid = true;
 
         for tiles in tiles_set {
@@ -429,7 +429,7 @@ impl Game {
         is_valid
     }
 
-    fn is_valid_mixed_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
+    pub fn is_valid_mixed_color_tiles(tiles_set: &Vec<Vec<Tile>>) -> bool {
         let mut is_valid = true;
 
         for tiles in tiles_set {
