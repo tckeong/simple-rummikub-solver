@@ -52,35 +52,15 @@ pub trait ToTiles {
     fn to_tiles(&self) -> GameOperation;
 }
 
-#[derive(Debug, Clone)]
-pub struct TileSetInfo {
-    pub tiles_type: TilesType,
-    pub start: u8,
-    pub end: u8,
-    pub color: Option<TileColor>,
-}
-
-impl TileSetInfo {
-    fn new(tiles_type: TilesType, start: u8, end: u8, color: Option<TileColor>) -> Self {
-        TileSetInfo {
-            tiles_type,
-            start,
-            end,
-            color,
-        }
-    }
-}
-
+#[derive(Debug)]
 pub(crate) struct Game {
     pub board: Vec<Vec<Tile>>,
-    pub tiles_set_info: Vec<TileSetInfo>,
 }
 
 impl Game {
     pub fn new() -> Self {
         Game {
             board: vec![vec![]],
-            tiles_set_info: vec![TileSetInfo::new(TilesType::MixedColor, 1, 13, None)],
         }
     }
 
@@ -92,16 +72,11 @@ impl Game {
         self.board.clone()
     }
 
-    pub fn get_tiles_set_info(&self) -> Vec<TileSetInfo> {
-        self.tiles_set_info.clone()
-    }
-
     pub(crate) fn operate(&mut self, mut operation: GameOperation) {
         match operation.command {
             Command::Put => {
                 operation.tiles.sort_unstable();
 
-                self.push_tiles_set_info(&operation.tiles);
                 self.board.push(operation.tiles);
             }
 
@@ -116,7 +91,6 @@ impl Game {
                 let tiles_to_replace = self.board[operation.index].clone();
                 self.board[operation.index] =
                     self.replace_wildcards(tiles_to_replace, replace_tiles);
-                self.set_tiles_set_info(operation.index);
 
                 let mut tiles = operation.tiles;
                 tiles.extend(vec![Tile::new(251, TileColor::Red, true); wildcard_count]);
@@ -124,7 +98,6 @@ impl Game {
                 let tiles_set = self.wildcard_to_tiles(tiles);
 
                 for tiles in tiles_set {
-                    self.push_tiles_set_info(&tiles);
                     self.board.push(tiles);
                 }
             }
@@ -138,10 +111,8 @@ impl Game {
                     let tiles = self.wildcard_to_tiles(tiles);
 
                     self.board[operation.index] = tiles[0].clone();
-                    self.set_tiles_set_info(operation.index);
 
                     if tiles.len() > 1 {
-                        self.push_tiles_set_info(&tiles[1]);
                         self.board.push(tiles[1].clone());
                     }
                 }
@@ -434,24 +405,6 @@ impl Game {
         (start, end)
     }
 
-    fn set_tiles_set_info(&mut self, index: usize) {
-        let tiles = &self.board[index];
-        let tiles_type = Self::get_tiles_type(tiles);
-        let (start, end) = self.get_range(tiles);
-        let color = (tiles_type == TilesType::PureColor).then_some(tiles[0].color);
-
-        self.tiles_set_info[index] = TileSetInfo::new(tiles_type, start, end, color);
-    }
-
-    fn push_tiles_set_info(&mut self, tiles: &Vec<Tile>) {
-        let tiles_type = Self::get_tiles_type(tiles);
-        let (start, end) = self.get_range(tiles);
-        let color = (tiles_type == TilesType::PureColor).then_some(tiles[0].color);
-
-        self.tiles_set_info
-            .push(TileSetInfo::new(tiles_type, start, end, color));
-    }
-
     fn is_valid_pure_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
         let mut is_valid = true;
 
@@ -573,11 +526,7 @@ mod tests {
         ));
 
         let board = game.get_board();
-        let tiles_info = game.get_tiles_set_info();
 
         println!("{:?}", board);
-        println!("{:?}", tiles_info);
-
-        assert_eq!(board.len(), tiles_info.len())
     }
 }
