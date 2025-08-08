@@ -26,8 +26,8 @@ pub struct GameOperation {
     pub tiles: Vec<Tile>,
 }
 
-#[derive(Debug)]
-enum TilesType {
+#[derive(Debug, Clone)]
+pub enum TilesType {
     PureColor,
     MixedColor,
 }
@@ -52,14 +52,33 @@ pub trait ToTiles {
     fn to_tiles(&self) -> GameOperation;
 }
 
+#[derive(Debug, Clone)]
+pub struct TileSetInfo {
+    pub tiles_type: TilesType,
+    pub start: u8,
+    pub end: u8,
+}
+
+impl TileSetInfo {
+    fn new(tiles_type: TilesType, start: u8, end: u8) -> Self {
+        TileSetInfo {
+            tiles_type,
+            start,
+            end,
+        }
+    }
+}
+
 pub(crate) struct Game {
     pub board: Vec<Vec<Tile>>,
+    pub tiles_set_info: Vec<TileSetInfo>,
 }
 
 impl Game {
     pub fn new() -> Self {
         Game {
             board: vec![vec![]],
+            tiles_set_info: vec![TileSetInfo::new(TilesType::MixedColor, 1, 13)],
         }
     }
 
@@ -71,10 +90,16 @@ impl Game {
         self.board.clone()
     }
 
+    pub fn get_tiles_info(&self) -> Vec<TileSetInfo> {
+        self.tiles_set_info.clone()
+    }
+
     pub(crate) fn operate(&mut self, mut operation: GameOperation) {
         match operation.command {
             Command::Put => {
                 operation.tiles.sort_unstable();
+
+                self.push_tiles_set_info(&operation.tiles);
                 self.board.push(operation.tiles);
             }
 
@@ -89,11 +114,17 @@ impl Game {
                 let tiles_to_replace = self.board[operation.index].clone();
                 self.board[operation.index] =
                     self.replace_wildcards(tiles_to_replace, replace_tiles);
-                let mut tiles = operation.tiles;
-                tiles.push(Tile::new(251, TileColor::Red, true));
+                self.set_tiles_set_info(operation.index);
 
-                let tiles = self.wildcard_to_tiles(tiles);
-                self.board.extend(tiles);
+                let mut tiles = operation.tiles;
+                tiles.extend(vec![Tile::new(251, TileColor::Red, true); wildcard_count]);
+
+                let tiles_set = self.wildcard_to_tiles(tiles);
+
+                for tiles in tiles_set {
+                    self.push_tiles_set_info(&tiles);
+                    self.board.push(tiles);
+                }
             }
 
             _ => {
@@ -105,8 +136,10 @@ impl Game {
                     let tiles = self.wildcard_to_tiles(tiles);
 
                     self.board[operation.index] = tiles[0].clone();
+                    self.set_tiles_set_info(operation.index);
 
                     if tiles.len() > 1 {
+                        self.push_tiles_set_info(&tiles[1]);
                         self.board.push(tiles[1].clone());
                     }
                 }
@@ -304,6 +337,38 @@ impl Game {
         }
     }
 
+    fn get_range(&self, tiles: &Vec<Tile>) -> (u8, u8) {
+        let mut start = u8::MAX;
+        let mut end = u8::MIN;
+
+        for tile in tiles {
+            if tile.is_wildcard {
+                continue;
+            }
+
+            start = start.min(tile.number);
+            end = end.max(tile.number);
+        }
+
+        (start, end)
+    }
+
+    fn set_tiles_set_info(&mut self, index: usize) {
+        let tiles = &self.board[index];
+        let tiles_type = self.get_tiles_type(tiles);
+        let (start, end) = self.get_range(tiles);
+
+        self.tiles_set_info[index] = TileSetInfo::new(tiles_type, start, end);
+    }
+
+    fn push_tiles_set_info(&mut self, tiles: &Vec<Tile>) {
+        let tiles_type = self.get_tiles_type(tiles);
+        let (start, end) = self.get_range(tiles);
+
+        self.tiles_set_info
+            .push(TileSetInfo::new(tiles_type, start, end));
+    }
+
     fn is_valid_pure_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
         let mut is_valid = true;
 
@@ -427,7 +492,11 @@ mod tests {
         ));
 
         let board = game.get_board();
+        let tiles_info = game.get_tiles_info();
 
         println!("{:?}", board);
+        println!("{:?}", tiles_info);
+
+        assert_eq!(board.len(), tiles_info.len())
     }
 }
