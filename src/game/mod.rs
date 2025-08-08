@@ -3,7 +3,7 @@ pub(crate) mod tile;
 pub(crate) mod tile_color;
 pub(crate) mod tile_command;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::vec;
 
 use tile::Tile;
@@ -26,7 +26,7 @@ pub struct GameOperation {
     pub tiles: Vec<Tile>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TilesType {
     PureColor,
     MixedColor,
@@ -57,14 +57,16 @@ pub struct TileSetInfo {
     pub tiles_type: TilesType,
     pub start: u8,
     pub end: u8,
+    pub color: Option<TileColor>,
 }
 
 impl TileSetInfo {
-    fn new(tiles_type: TilesType, start: u8, end: u8) -> Self {
+    fn new(tiles_type: TilesType, start: u8, end: u8, color: Option<TileColor>) -> Self {
         TileSetInfo {
             tiles_type,
             start,
             end,
+            color,
         }
     }
 }
@@ -78,7 +80,7 @@ impl Game {
     pub fn new() -> Self {
         Game {
             board: vec![vec![]],
-            tiles_set_info: vec![TileSetInfo::new(TilesType::MixedColor, 1, 13)],
+            tiles_set_info: vec![TileSetInfo::new(TilesType::MixedColor, 1, 13, None)],
         }
     }
 
@@ -90,7 +92,7 @@ impl Game {
         self.board.clone()
     }
 
-    pub fn get_tiles_info(&self) -> Vec<TileSetInfo> {
+    pub fn get_tiles_set_info(&self) -> Vec<TileSetInfo> {
         self.tiles_set_info.clone()
     }
 
@@ -104,7 +106,7 @@ impl Game {
             }
 
             Command::Replace => {
-                let wildcard_count = self.wildcard_count(&self.board[operation.index]);
+                let wildcard_count = Self::wildcard_count(&self.board[operation.index]);
                 let replace_tiles = operation.replace_tiles.unwrap();
 
                 if wildcard_count != replace_tiles.len() {
@@ -147,14 +149,23 @@ impl Game {
         }
     }
 
-    fn check_and_split(&mut self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
-        let tiles = tiles;
+    fn check_and_split(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
 
         if n < 6 {
             return vec![tiles];
         }
 
+        let tiles_type = Self::get_tiles_type(&tiles);
+
+        match tiles_type {
+            TilesType::PureColor => self.split_pure_color_tiles(tiles),
+            TilesType::MixedColor => self.split_mixed_colors_tiles(tiles),
+        }
+    }
+
+    fn split_pure_color_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+        let n = tiles.len();
         let mut last_repeat = 0;
 
         for i in 1..n {
@@ -179,11 +190,75 @@ impl Game {
         vec![split_tiles1, split_tiles2]
     }
 
+    fn split_mixed_colors_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+        let n = tiles.len();
+        let mut colors_map = HashMap::new();
+        let mut numbers_map = HashMap::new();
+
+        for i in 0..n {
+            let tile = &tiles[i];
+            let color = tile.color;
+            let number = tile.number;
+
+            colors_map.entry(color).or_insert(vec![]).push(i);
+            numbers_map.entry(number).or_insert(vec![]).push(i);
+        }
+
+        let max_color_count = colors_map
+            .iter()
+            .max_by_key(|(_, v)| v.len())
+            .unwrap()
+            .1
+            .len();
+
+        if max_color_count <= 2 {
+            // case multiple sets of same number mixed colors tiles
+            let mut split_tiles1 = Vec::new();
+            let mut split_tiles2 = Vec::new();
+
+            // assume user provide tiles are correct, all tiles are provide in same number
+            for (_, v) in colors_map {
+                if v.len() > 1 {
+                    split_tiles1.push(tiles[v[0]].clone());
+                    split_tiles2.push(tiles[v[1]].clone());
+                } else {
+                    if split_tiles1.len() < split_tiles2.len() {
+                        split_tiles1.push(tiles[v[0]].clone());
+                    } else {
+                        split_tiles2.push(tiles[v[0]].clone());
+                    }
+                }
+            }
+
+            vec![split_tiles1, split_tiles2]
+        } else {
+            // case multiple sets of different number pure color tiles + mixed colors tiles
+            let mixed_colors_number = numbers_map.iter().max_by_key(|(_, v)| v.len()).unwrap().0;
+
+            let split_tiles1 = numbers_map
+                .get(mixed_colors_number)
+                .unwrap()
+                .iter()
+                .map(|&i| tiles[i].clone())
+                .collect::<Vec<_>>();
+
+            let mut split_tiles2 = Vec::new();
+
+            for tile in tiles {
+                if tile.number != *mixed_colors_number {
+                    split_tiles2.push(tile);
+                }
+            }
+
+            vec![split_tiles1, split_tiles2]
+        }
+    }
+
     pub fn reset(&mut self) {
         self.board = vec![vec![]];
     }
 
-    fn wildcard_count(&self, tiles: &Vec<Tile>) -> usize {
+    pub fn wildcard_count(tiles: &Vec<Tile>) -> usize {
         let mut count = 0;
 
         for tile in tiles {
@@ -196,7 +271,7 @@ impl Game {
     }
 
     fn wildcard_to_tiles(&mut self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
-        let wildcard_count = self.wildcard_count(&tiles);
+        let wildcard_count = Self::wildcard_count(&tiles);
 
         if wildcard_count == 0 {
             return self.check_and_split(tiles);
@@ -207,7 +282,7 @@ impl Game {
             .into_iter()
             .filter(|tile| !tile.is_wildcard)
             .collect::<Vec<_>>();
-        let tiles_type = self.get_tiles_type(&tiles);
+        let tiles_type = Self::get_tiles_type(&tiles);
 
         match tiles_type {
             TilesType::PureColor => {
@@ -312,14 +387,16 @@ impl Game {
                     tile.is_wildcard = false;
                     tile.number = replace_tile.number;
                     tile.color = replace_tile.color;
+                    break;
                 }
             }
         }
 
+        tiles.sort_unstable();
         tiles
     }
 
-    fn get_tiles_type(&self, tiles: &Vec<Tile>) -> TilesType {
+    pub fn get_colors_count(tiles: &Vec<Tile>) -> usize {
         let mut colors = HashSet::new();
 
         for tile in tiles {
@@ -330,7 +407,11 @@ impl Game {
             colors.insert(tile.color);
         }
 
-        if colors.len() == 1 {
+        colors.len()
+    }
+
+    pub fn get_tiles_type(tiles: &Vec<Tile>) -> TilesType {
+        if Self::get_colors_count(tiles) == 1 {
             TilesType::PureColor
         } else {
             TilesType::MixedColor
@@ -355,18 +436,20 @@ impl Game {
 
     fn set_tiles_set_info(&mut self, index: usize) {
         let tiles = &self.board[index];
-        let tiles_type = self.get_tiles_type(tiles);
+        let tiles_type = Self::get_tiles_type(tiles);
         let (start, end) = self.get_range(tiles);
+        let color = (tiles_type == TilesType::PureColor).then_some(tiles[0].color);
 
-        self.tiles_set_info[index] = TileSetInfo::new(tiles_type, start, end);
+        self.tiles_set_info[index] = TileSetInfo::new(tiles_type, start, end, color);
     }
 
     fn push_tiles_set_info(&mut self, tiles: &Vec<Tile>) {
-        let tiles_type = self.get_tiles_type(tiles);
+        let tiles_type = Self::get_tiles_type(tiles);
         let (start, end) = self.get_range(tiles);
+        let color = (tiles_type == TilesType::PureColor).then_some(tiles[0].color);
 
         self.tiles_set_info
-            .push(TileSetInfo::new(tiles_type, start, end));
+            .push(TileSetInfo::new(tiles_type, start, end, color));
     }
 
     fn is_valid_pure_color_tiles(&self, tiles_set: &Vec<Vec<Tile>>) -> bool {
@@ -383,8 +466,6 @@ impl Game {
             for tile in tiles {
                 if tile.number == value {
                     value += 1;
-                } else if tile.number == value - 1 {
-                    continue;
                 } else {
                     is_valid = false;
                     break;
@@ -492,7 +573,7 @@ mod tests {
         ));
 
         let board = game.get_board();
-        let tiles_info = game.get_tiles_info();
+        let tiles_info = game.get_tiles_set_info();
 
         println!("{:?}", board);
         println!("{:?}", tiles_info);
