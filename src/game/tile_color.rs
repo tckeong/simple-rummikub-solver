@@ -46,7 +46,7 @@ impl TileColor {
         }
     }
 
-    pub fn to_rank(&self) -> u8 {
+    pub fn to_rank(&self) -> usize {
         match self {
             TileColor::Black => 0,
             TileColor::Blue => 1,

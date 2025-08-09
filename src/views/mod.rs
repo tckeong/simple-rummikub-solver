@@ -411,6 +411,10 @@ impl TUI {
         let solver = Solver::new(game);
         let result = solver.solve();
 
+        self.print_and_move("Loading...", 0)?;
+
+        self.execute_move(0, 0)?;
+
         if let Some(board) = result {
             self.print_and_move("Game Solved!", 1)?;
             self.print_and_move("Press 'c' to continue...", 2)?;
