@@ -64,6 +64,10 @@ impl Game {
         }
     }
 
+    pub fn new_with_board(board: Vec<Vec<Tile>>) -> Self {
+        Game { board }
+    }
+
     pub fn validate_index(&self, idx: usize) -> bool {
         idx < self.board.len()
     }
@@ -72,12 +76,17 @@ impl Game {
         self.board.clone()
     }
 
-    pub(crate) fn operate(&mut self, mut operation: GameOperation) {
+    pub(crate) fn operate(&mut self, operation: GameOperation) {
         match operation.command {
             Command::Put => {
-                operation.tiles.sort_unstable();
+                let mut tiles = operation.tiles;
+                tiles.sort_unstable();
 
-                self.board.push(operation.tiles);
+                let tiles = self.wildcard_to_tiles(tiles).clone();
+
+                for tile in tiles {
+                    self.board.push(tile);
+                }
             }
 
             Command::Replace => {

@@ -41,4 +41,16 @@ impl Tile {
             is_wildcard,
         }
     }
+
+    pub fn iter() -> impl Iterator<Item = Tile> {
+        let mut tiles = vec![];
+
+        for color in TileColor::iter() {
+            for number in 1..=13 {
+                tiles.push(Tile::new(number, color, true));
+            }
+        }
+
+        tiles.into_iter()
+    }
 }

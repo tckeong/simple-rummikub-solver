@@ -409,9 +409,10 @@ impl TUI {
     fn render_solver_page(&mut self) -> ioResult<()> {
         let game = self.game.clone();
         let solver = Solver::new(game);
-        let result = solver.solve();
 
         self.print_and_move("Loading...", 0)?;
+
+        let result = solver.solve();
 
         self.execute_move(0, 0)?;
 
