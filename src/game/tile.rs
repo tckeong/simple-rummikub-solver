@@ -1,5 +1,6 @@
 use super::tile_color::TileColor;
 use std::cmp::Ordering;
+use std::fmt;
 
 #[derive(Debug, Clone, Hash)]
 pub struct Tile {
@@ -32,6 +33,14 @@ impl PartialOrd for Tile {
 }
 
 pub type Tiles = Vec<Tile>;
+
+impl fmt::Display for Tile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let is_wildcard = if self.is_wildcard { "w" } else { "n" };
+
+        write!(f, "{}({}){}", self.color, self.number, is_wildcard)
+    }
+}
 
 impl Tile {
     pub(crate) fn new(number: u8, color: TileColor, is_wildcard: bool) -> Self {

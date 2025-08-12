@@ -239,15 +239,11 @@ impl Game {
     }
 
     pub fn wildcard_count(tiles: &Vec<Tile>) -> usize {
-        let mut count = 0;
-
-        for tile in tiles {
-            if tile.is_wildcard {
-                count += 1;
-            }
-        }
-
-        count
+        tiles
+            .iter()
+            .filter(|t| t.is_wildcard)
+            .collect::<Vec<_>>()
+            .len()
     }
 
     fn wildcard_to_tiles(&mut self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {

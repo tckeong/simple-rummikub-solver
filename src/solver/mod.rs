@@ -1,5 +1,9 @@
-use crate::game::{tile::Tile, tile_color::TileColor, Game, TilesType};
-use std::collections::HashMap;
+use crate::game::{
+    tile::{self, Tile},
+    tile_color::TileColor,
+    Game, TilesType,
+};
+use std::collections::{HashMap, HashSet};
 
 pub struct Solver {
     game: Game,
@@ -14,12 +18,24 @@ impl Solver {
         Solver::new(Game::new_with_board(board))
     }
 
-    fn search(&self, tiles: Vec<Tile>, solution_set: Vec<Vec<Tile>>) -> Option<Vec<Vec<Tile>>> {
+    fn tiles_to_string(tiles: Vec<Tile>) -> String {
+        tiles
+            .iter()
+            .filter(|t| !t.is_wildcard)
+            .fold(String::new(), |s, t| s + &t.to_string())
+    }
+
+    fn search(
+        &self,
+        tiles: Vec<Tile>,
+        solution_set: Vec<Vec<Tile>>,
+        cache: &mut HashSet<String>,
+    ) -> Option<Vec<Vec<Tile>>> {
         if tiles.is_empty() {
             return Some(solution_set);
         }
 
-        if tiles.len() <= 2 {
+        if cache.contains(&Self::tiles_to_string(tiles.clone())) || tiles.len() <= 2 {
             return None;
         }
 
@@ -41,10 +57,6 @@ impl Solver {
             return Some(solution_set);
         }
 
-        if leave_tiles.len() == tiles.len() {
-            return None;
-        }
-
         let candidates = vec![available_pure_color_tiles, available_mixed_colors_tiles];
         let candidates = candidates.into_iter().flatten().collect::<Vec<_>>();
 
@@ -59,9 +71,9 @@ impl Solver {
                         continue;
                     }
 
-                    let tiles = &tiles[i];
+                    let tile = &tiles[i];
 
-                    if c == tiles && c.is_wildcard == tiles.is_wildcard {
+                    if c == tile || (c.is_wildcard && tile.is_wildcard) {
                         removed.push(i);
                         break;
                     }
@@ -72,40 +84,67 @@ impl Solver {
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| !removed.contains(i))
-                .map(|(_, t)| t.clone())
+                .map(|(_, v)| v.clone())
                 .collect();
 
             let mut next_solution = solution_set.clone();
             next_solution.push(candidate.clone());
 
-            if let Some(solution) = self.search(remaining, next_solution.clone()) {
+            if let Some(solution) = self.search(remaining, next_solution.clone(), cache) {
                 return Some(solution);
             }
         }
+
+        cache.insert(Self::tiles_to_string(tiles));
 
         None
     }
 
     pub fn solve(&self) -> Option<Vec<Vec<Tile>>> {
         let board = self.game.get_board();
+        let test_board = board.clone();
         let user_tiles = board[0].clone();
         let mut board = board[1..].to_vec();
 
         let (available_tiles, leave_tiles) = self.pick_available(&user_tiles);
+
         board.extend(available_tiles);
 
+        println!(
+            "Original Size: {}",
+            test_board.iter().flatten().collect::<Vec<_>>().len()
+        );
+
+        println!(
+            "Original wildcard count: {}",
+            Game::wildcard_count(&test_board.iter().flatten().cloned().collect::<Vec<_>>())
+        );
+
         let (mut tiles, completed_tiles) = self.pick_relevant_tiles(&board, &leave_tiles);
+
         tiles.push(leave_tiles);
-        let tiles = tiles
-            .iter()
-            .flat_map(|v| v.iter())
-            .cloned()
-            .collect::<Vec<Tile>>();
+        let tiles = tiles.iter().flatten().cloned().collect::<Vec<Tile>>();
 
-        let solution = self.search(tiles, vec![]);
+        // println!("\n\nPut in tiles: {:?}\n\n", temp_tiles);
 
-        if let Some(mut solution) = solution {
-            solution.extend(completed_tiles);
+        // let solution = self.search(tiles, vec![], &mut HashSet::new());
+        let test_tiles = test_board.into_iter().flatten().collect::<Vec<_>>();
+        println!("Test tiles: {:?}", test_tiles);
+        let solution = self.search(test_tiles, vec![], &mut HashSet::new());
+
+        if let Some(solution) = solution {
+            println!(
+                "Solution: {}",
+                solution.iter().flatten().collect::<Vec<_>>().len()
+            );
+            let mut temp_solution = solution.iter().flatten().cloned().collect::<Vec<_>>();
+            temp_solution.sort_unstable();
+            println!(
+                "Solution tiles wildcard count: {}\n",
+                Game::wildcard_count(&temp_solution)
+            );
+            println!("\n\nSolution tiles: {:?}\n\n", temp_solution);
+
             Some(solution)
         } else {
             None
@@ -123,11 +162,11 @@ impl Solver {
         for tile in tiles {
             for i in 0..n {
                 if (Game::get_tiles_type(&board[i]) == TilesType::MixedColor
-                    && board[i][0].number == tile.number)
+                    && (board[i][0].number == tile.number || board[i].len() == 4))
                     || (Game::get_tiles_type(&board[i]) == TilesType::PureColor
                         && tile.number >= board[i][0].number
                         && tile.number <= board[i].last().unwrap().number)
-                    || Game::wildcard_count(tiles) > 0
+                    || Game::wildcard_count(&board[i]) > 0
                 {
                     relevant_index.push(i);
                 }
@@ -314,54 +353,76 @@ impl Solver {
         let mut tiles_set = Vec::new();
         let mut leave_tiles = Vec::new();
         let wildcard_count = Game::wildcard_count(tiles);
+        let tiles = tiles
+            .iter()
+            .filter(|t| !t.is_wildcard)
+            .cloned()
+            .collect::<Vec<_>>();
 
         if wildcard_count == 1 {
             for wildcard in Tile::iter() {
-                let mut tiles = tiles
-                    .iter()
-                    .filter(|t| !t.is_wildcard)
-                    .cloned()
-                    .collect::<Vec<_>>();
-                tiles.push(wildcard);
+                let mut tiles = tiles.clone();
+                tiles.push(wildcard.clone());
 
                 let mut mixed_colors_tiles_set = vec![vec![]; 14];
+                let mut skip = false;
 
                 for tile in tiles {
                     let index = tile.number as usize;
                     mixed_colors_tiles_set[index].push(tile.clone());
+
+                    if mixed_colors_tiles_set[index]
+                        .iter()
+                        .filter(|t| t.color == tile.color)
+                        .collect::<Vec<_>>()
+                        .len()
+                        > 2
+                    {
+                        skip = true;
+                        break;
+                    }
                 }
+
+                if skip {
+                    continue;
+                }
+
+                let mixed_colors_tiles_set = mixed_colors_tiles_set
+                    .iter()
+                    .filter(|t| t.len() > 0)
+                    .cloned()
+                    .collect::<Vec<_>>();
 
                 let is_valid_mixed_colors_tiles = |t: &Vec<Tile>| -> bool {
                     (t.len() == 3 || t.len() == 4 || t.len() >= 6)
                         && ((Game::get_colors_count(t) == 3 && (t.len() == 3 || t.len() == 6))
-                            || (Game::get_colors_count(t) == 4 && (t.len() == 4 || t.len() > 6)))
+                            || (Game::get_colors_count(t) == 4 && (t.len() == 4 || t.len() >= 6)))
                 };
 
                 let generate_mixed_colors_tiles_set = |tiles: &Vec<Tile>| -> Vec<Vec<Tile>> {
                     if tiles.len() < 6 {
                         vec![tiles.clone()]
                     } else {
-                        let number = tiles[0].number;
                         let mut colors_map = HashMap::new();
 
                         for tile in tiles {
                             let color = tile.color;
 
-                            *colors_map.entry(color).or_insert(0) += 1;
+                            colors_map.entry(color).or_insert(vec![]).push(tile.clone());
                         }
 
                         let mut split_tiles1 = Vec::new();
                         let mut split_tiles2 = Vec::new();
 
                         for c in colors_map {
-                            if c.1 > 1 {
-                                split_tiles1.push(Tile::new(number, c.0, false));
-                                split_tiles2.push(Tile::new(number, c.0, false));
+                            if c.1.len() > 1 {
+                                split_tiles1.push(c.1[0].clone());
+                                split_tiles2.push(c.1[1].clone());
                             } else {
                                 if split_tiles1.len() < split_tiles2.len() {
-                                    split_tiles1.push(Tile::new(number, c.0, false));
+                                    split_tiles1.push(c.1[0].clone());
                                 } else {
-                                    split_tiles2.push(Tile::new(number, c.0, false));
+                                    split_tiles2.push(c.1[0].clone());
                                 }
                             }
                         }
@@ -390,21 +451,38 @@ impl Solver {
         } else if wildcard_count == 2 {
             for w1 in Tile::iter() {
                 for w2 in Tile::iter() {
-                    let mut tiles = tiles
-                        .iter()
-                        .filter(|t| !t.is_wildcard)
-                        .cloned()
-                        .collect::<Vec<_>>();
-
+                    let mut tiles = tiles.clone();
                     tiles.push(w1.clone());
                     tiles.push(w2);
 
                     let mut mixed_colors_tiles_set = vec![vec![]; 14];
+                    let mut skip = false;
 
                     for tile in tiles {
                         let index = tile.number as usize;
                         mixed_colors_tiles_set[index].push(tile.clone());
+
+                        if mixed_colors_tiles_set[index]
+                            .iter()
+                            .filter(|t| t.color == tile.color)
+                            .collect::<Vec<_>>()
+                            .len()
+                            > 2
+                        {
+                            skip = true;
+                            break;
+                        }
                     }
+
+                    if skip {
+                        continue;
+                    }
+
+                    let mixed_colors_tiles_set = mixed_colors_tiles_set
+                        .iter()
+                        .filter(|t| t.len() > 0)
+                        .cloned()
+                        .collect::<Vec<_>>();
 
                     let is_valid_mixed_colors_tiles = |t: &Vec<Tile>| -> bool {
                         (t.len() == 3 || t.len() == 4 || t.len() >= 6)
@@ -417,27 +495,26 @@ impl Solver {
                         if tiles.len() < 6 {
                             vec![tiles.clone()]
                         } else {
-                            let number = tiles[0].number;
                             let mut colors_map = HashMap::new();
 
                             for tile in tiles {
                                 let color = tile.color;
 
-                                *colors_map.entry(color).or_insert(0) += 1;
+                                colors_map.entry(color).or_insert(vec![]).push(tile.clone());
                             }
 
                             let mut split_tiles1 = Vec::new();
                             let mut split_tiles2 = Vec::new();
 
                             for c in colors_map {
-                                if c.1 > 1 {
-                                    split_tiles1.push(Tile::new(number, c.0, false));
-                                    split_tiles2.push(Tile::new(number, c.0, false));
+                                if c.1.len() > 1 {
+                                    split_tiles1.push(c.1[0].clone());
+                                    split_tiles2.push(c.1[1].clone());
                                 } else {
                                     if split_tiles1.len() < split_tiles2.len() {
-                                        split_tiles1.push(Tile::new(number, c.0, false));
+                                        split_tiles1.push(c.1[0].clone());
                                     } else {
-                                        split_tiles2.push(Tile::new(number, c.0, false));
+                                        split_tiles2.push(c.1[0].clone());
                                     }
                                 }
                             }
@@ -674,12 +751,9 @@ mod tests {
         ));
 
         let solver = Solver::new(game);
+        let solution = solver.solve();
 
-        if let Some(solution) = solver.solve() {
-            println!("{:?}", solution);
-        }
-
-        assert!(solver.solve().is_none());
+        assert!(solution.is_none());
     }
 
     #[test]
@@ -788,7 +862,7 @@ mod tests {
         let game = Game::new();
         let solver = Solver::new(game);
 
-        let solution = solver.search(tiles, Vec::new());
+        let solution = solver.search(tiles, Vec::new(), &mut HashSet::new());
 
         println!("{:?}", solution);
         assert!(solution.is_some());
@@ -811,7 +885,7 @@ mod tests {
         let game = Game::new();
         let solver = Solver::new(game);
 
-        let solution = solver.search(tiles, Vec::new());
+        let solution = solver.search(tiles, Vec::new(), &mut HashSet::new());
 
         println!("{:?}", solution);
         assert!(solution.is_none());
@@ -907,12 +981,20 @@ mod tests {
 
         let mut board = vec![user_tiles];
         board.extend(tiles);
-        let solver = Solver::new_with_board(board);
+
+        let solver = Solver::new_with_board(board.clone());
 
         let solution = solver.solve();
 
-        println!("{:?}", solution);
-        assert!(solution.is_none());
+        if let Some(solution) = solution.clone() {
+            println!(
+                "Solution Length: {}",
+                solution.iter().flatten().collect::<Vec<_>>().len()
+            );
+            println!("Solution: {:?}", solution);
+        }
+
+        assert!(solution.is_some());
     }
 
     #[test]
@@ -936,9 +1018,25 @@ mod tests {
             ],
         ];
 
+        println!(
+            "Board Length: {}",
+            board.iter().flatten().collect::<Vec<_>>().len()
+        );
+
         let solver = Solver::new_with_board(board.clone());
 
         let solution = solver.solve();
+
+        println!(
+            "Solution Length: {}",
+            solution
+                .clone()
+                .unwrap()
+                .iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .len()
+        );
 
         println!("{:?}", solution);
         assert!(solution.is_some());

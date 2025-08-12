@@ -1,5 +1,6 @@
 use crossterm::style::Color;
 use std::cmp::Ordering;
+use std::fmt;
 
 // h, b, o, r
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,6 +20,19 @@ impl PartialOrd for TileColor {
 impl Ord for TileColor {
     fn cmp(&self, other: &Self) -> Ordering {
         self.to_rank().cmp(&other.to_rank())
+    }
+}
+
+impl fmt::Display for TileColor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let color = match self {
+            TileColor::Blue => "b",
+            TileColor::Black => "h",
+            TileColor::Orange => "o",
+            TileColor::Red => "r",
+        };
+
+        write!(f, "{}", color)
     }
 }
 
