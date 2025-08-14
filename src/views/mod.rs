@@ -304,13 +304,11 @@ impl TUI {
         self.print_and_move("Available Commands: ", 1)?;
         self.print_and_move("    a - Add a tile to current tiles set.", 1)?;
         self.print_and_move("    d - Draw a tile from the deck.", 1)?;
-        self.print_and_move("    p - put a set of tiles on the table.", 2)?;
+        self.print_and_move("    p - put a set of tiles on the table.", 1)?;
+        self.print_and_move("    r - Replace the wildcards.", 1)?;
+        self.print_and_move("    solve - Solve the game.", 2)?;
         self.print_and_move(
             "[color] - The color of the tile can be 'b' - blue, 'r' - red, 'o' - orange, 'h' - black.",
-            1,
-        )?;
-        self.print_and_move(
-            "For the command p, can ignore the parameter [index], just put -1",
             2,
         )?;
         self.print_and_move(
@@ -319,6 +317,8 @@ impl TUI {
         )?;
         self.print_and_move("p[index]([number], *)[color] - Put a set of tiles with different numbers and same color.", 1)?;
         self.print_and_move("p[index]([color], *)[number] - Put a set of tiles with different colors and same number.", 1)?;
+        self.print_and_move("r[index]([number], *)[color]([number^], *)[color^] - Replace the wildcards with the first set of tiles, 
+        \r\tand then put the wildcards into the second sets (which has the ^ symbol).", 2)?;
         self.print_and_move("[command][index]([number], *)[color] - Execute a command with a set of tiles with different numbers and same color.", 1)?;
         self.print_and_move("[command][index]([color], *)[number] - Execute a command with a set of tiles with different colors and same number.", 2)?;
         self.print_and_move("Example: ", 1)?;
@@ -344,8 +344,11 @@ impl TUI {
         )?;
         self.print_and_move(
             "    d(10)r - Draw a red tile with number 10 from the deck.",
-            2,
+            1,
         )?;
+        self.print_and_move(
+            "    r1(11,12)h(10,12)b - Replace the wildcards with black tiles with number 11 and 12 to the tile set with index 1.",   1)?;
+        self.print_and_move("\tThen, put these wildcards to the blue tiles with number 10 and 12, and put the new tiles to the board.", 2)?;
         self.print_and_move("Rules End.", 2)?;
 
         self.print_and_move("Press 'n' to continue...", 1)?;
@@ -382,21 +385,7 @@ impl TUI {
         self.print_and_move("Current Board: ", 2)?;
         let board = self.game.get_board();
 
-        for (i, row) in board.iter().enumerate() {
-            if i == 0 {
-                continue;
-            }
-
-            self.execute(cursor::MoveTo(0, self.y_pos + 1))?;
-            print!("Index {}: ", i);
-            self.execute_move(0, 0)?;
-            for (j, tile) in row.iter().enumerate() {
-                self.draw_tile(tile.clone(), 11 + (j * 8) as u16)?;
-            }
-
-            self.y_pos += 3;
-        }
-
+        self.print_board(&board, true)?;
         self.y_pos += 4;
 
         self.execute_move(0, 0)?;
@@ -422,22 +411,44 @@ impl TUI {
 
             self.print_and_move("The solution board: ", 2)?;
 
-            for (i, row) in board.iter().enumerate() {
-                self.execute(cursor::MoveTo(0, self.y_pos + 1))?;
-                print!("Index {}: ", i);
-                self.execute_move(0, 0)?;
-                for (j, tile) in row.iter().enumerate() {
-                    self.draw_tile(tile.clone(), 11 + (j * 8) as u16)?;
-                }
-
-                self.y_pos += 3;
-            }
+            self.print_board(&board, false)?;
         } else {
             self.print_and_move("Game Not Solved!", 1)?;
             self.print_and_move("Press 'c' to continue...", 2)?;
         }
 
         self.execute_move(0, 0)?;
+
+        Ok(())
+    }
+
+    fn print_board(&mut self, board: &Vec<Vec<Tile>>, skip: bool) -> ioResult<()> {
+        let mut count = 0;
+
+        for (i, row) in board.iter().enumerate() {
+            if skip && i == 0 {
+                continue;
+            }
+
+            let x_pos =
+                (board[i - 1].len() * 1.min(count) * 8 + 11 * 1.min(count) + (12) * count) as u16;
+
+            self.execute(cursor::MoveTo(x_pos, self.y_pos + 1))?;
+            print!("Index {}: ", i);
+            self.execute_move(0, 0)?;
+            for (j, tile) in row.iter().enumerate() {
+                self.draw_tile(tile.clone(), x_pos + 11 + (j * 8) as u16)?;
+            }
+
+            count += 1;
+
+            if board[i - 1].len() > 5 || count > 1 {
+                self.y_pos += 3;
+                count = 0;
+            }
+        }
+
+        self.y_pos += 4;
 
         Ok(())
     }
