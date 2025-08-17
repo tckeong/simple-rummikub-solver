@@ -32,8 +32,6 @@ impl PartialOrd for Tile {
     }
 }
 
-pub type Tiles = Vec<Tile>;
-
 impl fmt::Display for Tile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let is_wildcard = if self.is_wildcard { "w" } else { "n" };

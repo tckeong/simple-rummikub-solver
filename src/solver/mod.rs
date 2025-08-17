@@ -1,4 +1,4 @@
-use crate::game::{tile::Tile, tile_color::TileColor, Game, GameOperation, TilesType};
+use crate::game::{tile::Tile, Game, TilesType};
 use std::collections::{HashMap, HashSet};
 
 pub struct Solver {
@@ -8,10 +8,6 @@ pub struct Solver {
 impl Solver {
     pub fn new(game: Game) -> Self {
         Solver { game }
-    }
-
-    pub fn new_with_board(board: Vec<Vec<Tile>>) -> Self {
-        Solver::new(Game::new_with_board(board))
     }
 
     fn tiles_to_string(mut tiles: Vec<Tile>) -> String {
@@ -102,7 +98,6 @@ impl Solver {
 
     pub fn solve(&self) -> Option<Vec<Vec<Tile>>> {
         let board = self.game.get_board();
-        let test_board = board.clone();
         let user_tiles = board[0].clone();
         let mut board = board[1..].to_vec();
 
@@ -118,27 +113,6 @@ impl Solver {
         if tiles.is_empty() {
             return Some(board);
         }
-
-        println!(
-            "Before filtered: {}",
-            test_board.iter().flatten().collect::<Vec<_>>().len()
-        );
-        println!("After filtered: {}", tiles.len());
-        println!("\n\nPicked tiles: {:?}\n\n", tiles);
-        println!(
-            "\n\nAll pure color tiles: {:?}\n\n",
-            self.get_available_pure_color_tiles_sets(&tiles).0
-        );
-        println!(
-            "\n\nAll mixed colors tiles: {:?}\n\n",
-            self.get_available_mixed_colors_tiles_sets(&tiles).0
-        );
-
-        // println!("\n\nPut in tiles: {:?}\n\n", temp_tiles);
-
-        // let solution = self.search(tiles, vec![], &mut HashSet::new());
-        let test_tiles = test_board.into_iter().flatten().collect::<Vec<_>>();
-        // self.search(test_tiles, vec![], &mut HashSet::new())
 
         let solution = self.search(tiles, Vec::new(), &mut HashSet::new());
 
@@ -506,10 +480,32 @@ impl Solver {
             .collect::<Vec<_>>();
 
         if wildcard_count == 1 {
-            for color in TileColor::iter() {
-                for number in 1..=13 {
+            for tile in Tile::iter() {
+                let mut tiles = tiles.clone();
+                tiles.push(tile);
+
+                let (available_tiles, leave_tiles) =
+                    self.get_available_pure_color_tiles_sets(&tiles);
+
+                if !available_tiles.is_empty() {
+                    return (available_tiles, leave_tiles);
+                }
+
+                let (available_tiles, leave_tiles) =
+                    self.get_available_mixed_colors_tiles_sets(&tiles);
+
+                if !available_tiles.is_empty() {
+                    return (available_tiles, leave_tiles);
+                }
+            }
+        }
+
+        if wildcard_count == 2 {
+            for tile1 in Tile::iter() {
+                for tile2 in Tile::iter() {
                     let mut tiles = tiles.clone();
-                    tiles.push(Tile::new(number, color, true));
+                    tiles.push(tile1.clone());
+                    tiles.push(tile2);
 
                     let (available_tiles, leave_tiles) =
                         self.get_available_pure_color_tiles_sets(&tiles);
@@ -528,83 +524,7 @@ impl Solver {
             }
         }
 
-        if wildcard_count == 2 {
-            for c1 in TileColor::iter() {
-                for c2 in TileColor::iter() {
-                    for n1 in 1..=13 {
-                        for n2 in 1..=13 {
-                            let tile1 = Tile::new(n1, c1, true);
-                            let tile2 = Tile::new(n2, c2, true);
-
-                            let mut tiles = tiles.clone();
-                            tiles.push(tile1);
-                            tiles.push(tile2);
-
-                            let (available_tiles, leave_tiles) =
-                                self.get_available_pure_color_tiles_sets(&tiles);
-
-                            if !available_tiles.is_empty() {
-                                return (available_tiles, leave_tiles);
-                            }
-
-                            let (available_tiles, leave_tiles) =
-                                self.get_available_mixed_colors_tiles_sets(&tiles);
-
-                            if !available_tiles.is_empty() {
-                                return (available_tiles, leave_tiles);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         (vec![], tiles.clone())
-    }
-
-    fn try_fill_board(&self, board: &Vec<Vec<Tile>>, tile: Tile) -> Option<usize> {
-        let n = board.len();
-
-        let same_color = |tiles: &Vec<Tile>, tile: &Tile| -> bool {
-            Game::get_tiles_type(tiles) == TilesType::PureColor && tiles[0].color == tile.color
-        };
-
-        let same_number = |tiles: &Vec<Tile>, tile: &Tile| -> bool {
-            Game::get_tiles_type(tiles) == TilesType::MixedColor && tiles[0].number == tile.number
-        };
-
-        for i in 0..n {
-            let tiles = &board[i];
-            if same_color(tiles, &tile) {
-                if self.check_pure_color_valid(tiles, &tile) {
-                    return Some(i);
-                }
-            }
-
-            if same_number(tiles, &tile) {
-                if self.check_mixed_color_valid(tiles, &tile) {
-                    return Some(i);
-                }
-            }
-        }
-
-        None
-    }
-
-    fn check_pure_color_valid(&self, tiles: &Vec<Tile>, tile: &Tile) -> bool {
-        let mut tiles = tiles.clone();
-        tiles.push(tile.clone());
-        tiles.sort_unstable();
-
-        Game::is_valid_pure_color_tiles(&vec![tiles])
-    }
-
-    fn check_mixed_color_valid(&self, tiles: &Vec<Tile>, tile: &Tile) -> bool {
-        let mut tiles = tiles.clone();
-        tiles.push(tile.clone());
-        tiles.sort_unstable();
-
-        Game::is_valid_mixed_color_tiles(&vec![tiles])
     }
 }
 
@@ -865,7 +785,7 @@ mod tests {
         let mut board = vec![user_tiles];
         board.extend(tiles);
 
-        let solver = Solver::new_with_board(board.clone());
+        let solver = Solver::new(Game::new_with_board(board.clone()));
 
         let solution = solver.solve();
 
@@ -906,7 +826,7 @@ mod tests {
             board.iter().flatten().collect::<Vec<_>>().len()
         );
 
-        let solver = Solver::new_with_board(board.clone());
+        let solver = Solver::new(Game::new_with_board(board.clone()));
 
         let solution = solver.solve();
 
@@ -1062,7 +982,7 @@ mod tests {
         let mut board = vec![user_tiles];
         board.extend(game_board.clone());
 
-        let solver = Solver::new_with_board(board);
+        let solver = Solver::new(Game::new_with_board(board));
 
         let solution = solver.solve();
 

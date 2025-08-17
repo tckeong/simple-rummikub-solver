@@ -53,7 +53,7 @@ pub trait ToTiles {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Game {
+pub struct Game {
     pub board: Vec<Vec<Tile>>,
 }
 
@@ -129,7 +129,7 @@ impl Game {
         }
     }
 
-    pub fn check_and_split(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    pub fn check_and_split(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
 
         if n < 6 {
@@ -139,12 +139,12 @@ impl Game {
         let tiles_type = Self::get_tiles_type(&tiles);
 
         match tiles_type {
-            TilesType::PureColor => Self::split_pure_color_tiles(tiles),
-            TilesType::MixedColor => Self::split_mixed_colors_tiles(tiles),
+            TilesType::PureColor => self.split_pure_color_tiles(tiles),
+            TilesType::MixedColor => self.split_mixed_colors_tiles(tiles),
         }
     }
 
-    fn split_pure_color_tiles(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    fn split_pure_color_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
         let mut last_repeat = 0;
 
@@ -170,7 +170,8 @@ impl Game {
         vec![split_tiles1, split_tiles2]
     }
 
-    fn split_mixed_colors_tiles(tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
+    // assume user provide tiles are correct, all tiles are provide in same number
+    fn split_mixed_colors_tiles(&self, tiles: Vec<Tile>) -> Vec<Vec<Tile>> {
         let n = tiles.len();
         let mut colors_map = HashMap::new();
         let mut numbers_map = HashMap::new();
@@ -184,19 +185,18 @@ impl Game {
             numbers_map.entry(number).or_insert(vec![]).push(i);
         }
 
-        let max_color_count = colors_map
+        let max_same_color_count = colors_map
             .iter()
             .max_by_key(|(_, v)| v.len())
             .unwrap()
             .1
             .len();
 
-        if max_color_count <= 2 {
+        if max_same_color_count <= 2 {
             // case multiple sets of same number mixed colors tiles
             let mut split_tiles1 = Vec::new();
             let mut split_tiles2 = Vec::new();
 
-            // assume user provide tiles are correct, all tiles are provide in same number
             for (_, v) in colors_map {
                 if v.len() > 1 {
                     split_tiles1.push(tiles[v[0]].clone());
@@ -214,18 +214,20 @@ impl Game {
         } else {
             // case multiple sets of different number pure color tiles + mixed colors tiles
             let mixed_colors_number = numbers_map.iter().max_by_key(|(_, v)| v.len()).unwrap().0;
+            let pure_color = colors_map.iter().max_by_key(|(_, v)| v.len()).unwrap().0;
 
             let split_tiles1 = numbers_map
                 .get(mixed_colors_number)
                 .unwrap()
                 .iter()
                 .map(|&i| tiles[i].clone())
+                .filter(|t| t.color != *pure_color)
                 .collect::<Vec<_>>();
 
             let mut split_tiles2 = Vec::new();
 
             for tile in tiles {
-                if tile.number != *mixed_colors_number {
+                if tile.number != *mixed_colors_number || tile.color == *pure_color {
                     split_tiles2.push(tile);
                 }
             }
@@ -250,7 +252,7 @@ impl Game {
         let wildcard_count = Self::wildcard_count(&tiles);
 
         if wildcard_count == 0 {
-            return Self::check_and_split(tiles);
+            return self.check_and_split(tiles);
         }
 
         let tiles = tiles
@@ -280,7 +282,7 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = Self::check_and_split(tiles);
+                        tiles_set = self.check_and_split(tiles);
 
                         if Self::is_valid_pure_color_tiles(&tiles_set) {
                             break;
@@ -296,7 +298,7 @@ impl Game {
                             tiles.push(tile2);
                             tiles.sort_unstable();
 
-                            tiles_set = Self::check_and_split(tiles);
+                            tiles_set = self.check_and_split(tiles);
 
                             if Self::is_valid_pure_color_tiles(&tiles_set) {
                                 break;
@@ -321,7 +323,7 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = Self::check_and_split(tiles);
+                        tiles_set = self.check_and_split(tiles);
 
                         if Self::is_valid_mixed_color_tiles(&tiles_set) {
                             break;
@@ -338,7 +340,7 @@ impl Game {
                             tiles.push(tile2);
                             tiles.sort_unstable();
 
-                            tiles_set = Self::check_and_split(tiles);
+                            tiles_set = self.check_and_split(tiles);
 
                             if Self::is_valid_mixed_color_tiles(&tiles_set) {
                                 break;
@@ -392,22 +394,6 @@ impl Game {
         } else {
             TilesType::MixedColor
         }
-    }
-
-    fn get_range(&self, tiles: &Vec<Tile>) -> (u8, u8) {
-        let mut start = u8::MAX;
-        let mut end = u8::MIN;
-
-        for tile in tiles {
-            if tile.is_wildcard {
-                continue;
-            }
-
-            start = start.min(tile.number);
-            end = end.max(tile.number);
-        }
-
-        (start, end)
     }
 
     pub fn is_valid_pure_color_tiles(tiles_set: &Vec<Vec<Tile>>) -> bool {
