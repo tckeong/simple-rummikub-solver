@@ -1,41 +1,40 @@
 # GEMINI.md - Project Context & Instructions
 
-This file provides a high-level overview and development guidelines for the `rummy-app` project.
+This file provides the foundational context, architectural patterns, and development mandates for the `rummy-app` project.
 
-## Project Overview
-`rummy-app` is a Rust-based Rummikub solver and game manager featuring an interactive Terminal User Interface (TUI). It allows users to track a Rummikub board, manage their hand, and find optimal tile combinations using a highly optimized search engine.
+## Project Essence
+`rummy-app` is a high-performance Rummikub utility that bridges a custom Terminal User Interface (TUI) with a highly optimized Depth-First Search (DFS) engine. Its core objective is to reorganize a set of Rummikub tiles into valid runs and groups in sub-second time, even when considering multiple wildcards.
 
-### Core Architecture
-- **`game`**: Domain entities (`Tile`, `TileColor`), game state management (`Game`), and a regex-based command `Parser`.
-- **`solver`**: A high-performance Depth-First Search (DFS) engine. It uses targeted candidate generation, lazy wildcard assignment, and `BTreeMap`-based state tracking to solve complex boards in sub-second time.
-- **`views`**: An interactive TUI built with `crossterm`, implementing a page-based state machine (Main Menu, Rules, Game Board, Solver).
+## Architectural Abstract
 
-### Key Technologies
-- **Rust (Edition 2021)**
-- **crossterm**: For TUI rendering and raw mode terminal handling.
-- **regex**: For parsing shorthand game commands.
-- **itertools**: For efficient color combinations in group finding.
+### 1. Data Transformation Pipeline
+The system operates as a linear transformation pipeline:
+- **Input Layer (`src/views`)**: Captures raw terminal keystrokes into a string buffer.
+- **Parsing Layer (`src/game/parser.rs`)**: Uses Regex to decompose strings into `TileCommand` primitives.
+- **Operation Layer (`src/game/mod.rs`)**: Translates commands into `GameOperation`s that mutate the `Game` state (the `board`).
+- **Optimization Layer (`src/solver/mod.rs`)**: Flattens the board into a frequency map (`BTreeMap<Tile, u8>`) and executes an exhaustive DFS to find a valid `solution_set`.
 
-## Building and Running
+### 2. Search & Solver Philosophy
+The solver avoids the "combinatorial explosion" common in Rummikub solvers through several abstract strategies:
+- **Targeted Candidate Generation**: Instead of finding all possible sets in the entire pool, the solver picks the "first available" tile and only generates sets that *must* include that tile.
+- **Lazy Wildcard Assignment**: Wildcards are treated as abstract "jokers" during set generation. Their concrete values are only assigned when they are needed to fill a gap in a run or a group, rather than permuting them upfront.
+- **State Memoization**: Every unique tile pool state is hashed/keyed. If the solver returns to a state it has already explored and failed, it backtracks immediately.
 
-### Development Commands
-- **Run the App**: `cargo run`
-- **Build**: `cargo build`
-- **Run Unit Tests**: `cargo test`
-- **Performance Benchmarking**: `cargo test --release solver::tests::test10` (Always use `--release` for solver performance testing).
+### 3. State & Memory Management
+- **Frequency Mapping**: The board is represented as a `BTreeMap<Tile, u8>` during search. This provides $O(\log n)$ access and ensures that the "remaining tiles" state is compact and stable for caching.
+- **Clone Minimization**: The search algorithm minimizes cloning by passing references where possible and using "decrement-then-recurse-then-increment" patterns for backtracking.
 
-## Development Conventions
+## Technical Mandates
 
-### Coding Style
-- **Efficiency**: Favor references (`&[Tile]`) or frequency maps (`BTreeMap<Tile, u8>`) over cloning large tile vectors.
-- **Idiomatic Iterators**: Use `.count()`, `.is_empty()`, and other iterator adapters instead of manual loops or intermediate collections where possible.
-- **Error Handling**: Commands and parsers should return `Result` types. Avoid `panic!` or `unwrap()` in the TUI loop to prevent terminal crashes.
+### Building and Running
+- **Primary Build**: `cargo build`
+- **TUI Execution**: `cargo run`
+- **Solver Performance**: Always test the solver with the `--release` flag (`cargo test --release`). Debug mode performance is significantly slower due to the deep recursion and heavy iterator usage.
 
-### Solver Logic
-- The solver is exhaustive. It picks the "first available" tile and attempts to form a valid set (Run or Group) around it.
-- **Wildcards**: Wildcards should be treated as flexible placeholders. Do not permute wildcards through all 52 tile types upfront; instead, let the set-validation logic "consume" them as needed.
-- **Memoization**: Always use `CacheKey` (a sorted representation of the tile pool) to avoid re-searching identical board states.
+### Development Conventions
+- **Entity Equality**: The `Tile` struct's `PartialEq` implementation **must** include `is_wildcard`. This is critical for the solver to correctly distinguish between a joker and a regular tile with the same value.
+- **Iterator Idioms**: Prefer `.count()` and `.is_empty()` over `.collect().len()`. Avoid unnecessary allocations in the hot loops of the solver.
+- **TUI Safety**: Never use `panic!` or `unwrap()` in code paths triggered by the TUI. All errors must be propagated as `Result` and displayed on the `InvalidCommandPage`.
 
-### TUI Management
-- The TUI uses an alternate screen and raw mode. Ensure `terminal::disable_raw_mode()` and `terminal::LeaveAlternateScreen` are called on exit (handled in `TUI::run`).
-- Page transitions are managed via the `Page` enum in `src/views/mod.rs`.
+### Page State Machine
+The TUI is a finite state machine driven by the `Page` enum. New screens or modal states must be added as variants to this enum to maintain clean navigation and "Previous Page" logic.
