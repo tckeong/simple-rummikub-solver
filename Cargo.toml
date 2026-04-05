@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 crossterm = "0.28"
 regex = "1"
+itertools = "0.13"

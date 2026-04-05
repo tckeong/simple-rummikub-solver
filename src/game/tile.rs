@@ -11,7 +11,7 @@ pub struct Tile {
 
 impl PartialEq for Tile {
     fn eq(&self, other: &Self) -> bool {
-        self.number == other.number && self.color == other.color
+        self.number == other.number && self.color == other.color && self.is_wildcard == other.is_wildcard
     }
 }
 

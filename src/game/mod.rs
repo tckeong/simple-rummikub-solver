@@ -90,6 +90,9 @@ impl Game {
             }
 
             Command::Replace => {
+                while self.board.len() <= operation.index {
+                    self.board.push(Vec::new());
+                }
                 let wildcard_count = Self::wildcard_count(&self.board[operation.index]);
                 let replace_tiles = operation.replace_tiles.unwrap();
 
@@ -112,6 +115,9 @@ impl Game {
             }
 
             _ => {
+                while self.board.len() <= operation.index {
+                    self.board.push(Vec::new());
+                }
                 self.board[operation.index].extend(operation.tiles);
                 self.board[operation.index].sort_unstable();
 
@@ -119,10 +125,12 @@ impl Game {
                     let tiles = self.board[operation.index].clone();
                     let tiles = self.wildcard_to_tiles(tiles);
 
-                    self.board[operation.index] = tiles[0].clone();
+                    if !tiles.is_empty() {
+                        self.board[operation.index] = tiles[0].clone();
 
-                    if tiles.len() > 1 {
-                        self.board.push(tiles[1].clone());
+                        if tiles.len() > 1 {
+                            self.board.push(tiles[1].clone());
+                        }
                     }
                 }
             }
@@ -282,9 +290,10 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = self.check_and_split(tiles);
+                        let temp_tiles_set = self.check_and_split(tiles);
 
-                        if Self::is_valid_pure_color_tiles(&tiles_set) {
+                        if Self::is_valid_pure_color_tiles(&temp_tiles_set) {
+                            tiles_set = temp_tiles_set;
                             break;
                         }
                     }
@@ -323,9 +332,10 @@ impl Game {
                         tiles.push(tile);
                         tiles.sort_unstable();
 
-                        tiles_set = self.check_and_split(tiles);
+                        let temp_tiles_set = self.check_and_split(tiles);
 
-                        if Self::is_valid_mixed_color_tiles(&tiles_set) {
+                        if Self::is_valid_mixed_color_tiles(&temp_tiles_set) {
+                            tiles_set = temp_tiles_set;
                             break;
                         }
                     }
@@ -340,9 +350,10 @@ impl Game {
                             tiles.push(tile2);
                             tiles.sort_unstable();
 
-                            tiles_set = self.check_and_split(tiles);
+                            let temp_tiles_set = self.check_and_split(tiles);
 
-                            if Self::is_valid_mixed_color_tiles(&tiles_set) {
+                            if Self::is_valid_mixed_color_tiles(&temp_tiles_set) {
+                                tiles_set = temp_tiles_set;
                                 break;
                             }
                         }
@@ -449,7 +460,7 @@ mod tests {
         let tile1 = Tile::new(1, TileColor::Red, true);
         let tile2 = Tile::new(1, TileColor::Red, false);
 
-        assert!(tile1 == tile2);
+        assert!(tile1 != tile2);
     }
 
     #[test]
